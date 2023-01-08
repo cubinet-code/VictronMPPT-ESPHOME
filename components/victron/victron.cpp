@@ -107,6 +107,7 @@ void VictronComponent::loop() {
       }
       label_.clear();
       value_.clear();
+      hex_data_.clear();
       state_ = 1;
     }
     if (state_ == 1) {
@@ -143,12 +144,45 @@ void VictronComponent::loop() {
         value_.push_back(c);
       }
     }
-    // Discard ve.direct hex frame
-    if (state_ == 3) {
-      if (c == '\r' || c == '\n') {
-        state_ = 0;
-      }
-    }
+        // ve.direct hex frame
+        if (state_ == 3)
+        {
+          // End of HEX protocol line
+          if (c == '\r' || c == '\n')
+          {
+            std::string register_, flag_, raw_;
+            raw_ = hex_data_;
+            // Extract Command
+            long int cmd_ = strtol(hex_data_.substr(0, 1).c_str(), NULL, 16);
+            hex_data_.erase(0, 1);
+            // Extract Checksum
+            long int checksum_ = strtol(hex_data_.substr(hex_data_.size() - 2).c_str(), NULL, 16);
+            hex_data_.erase(hex_data_.length() - 2);
+
+            if (cmd_ == 0x7 || cmd_ == 0x8 || cmd_ == 0xa)
+            {
+              // Extract Register
+              register_ = hex_data_.substr(0, 4);
+              register_ = register_.substr(2, 2) + register_.substr(0, 2);
+              hex_data_.erase(0, 4);
+              // Extract Flag
+              flag_ = hex_data_.substr(0, 2);
+              hex_data_.erase(0, 2);
+              ESP_LOGI("victron", "CMD:%lx REG:%s FLAG:%s DATA:%s CS:%02lx RAW:%s", cmd_, register_.c_str(), flag_.c_str(), hex_data_.c_str(), checksum_, raw_.c_str());
+
+              // this->publish_state_(load_off_reason_text_sensor_, hex_data_); // NOLINT(cert-err34-c)
+            }
+            else
+            {
+              ESP_LOGI("victron", "CMD:%lx DATA:%s CS:%02lx", cmd_, hex_data_.c_str(), checksum_);
+            }
+            state_ = 0;
+          }
+          else
+          {
+            hex_data_.push_back(c);
+          }
+        }
   }
 }
 
